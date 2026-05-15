@@ -1,0 +1,13 @@
+What is Ollama?
+Ollama is a tool that lets you run open-source LLMs (like Qwen, Llama, Mistral) directly on your laptop — no internet needed, no API key, completely free.
+
+Think of it like: Netflix vs buying a DVD. Normally you stream from the cloud (API). With Ollama, you have the movie stored locally.
+
+Setup (one-time)
+# 1. Install Ollama from https://ollama.com
+# 2. Pull a model (this downloads it to your laptop)
+ollama pull qwen2.5:7b
+# 3. Ollama starts automatically as a background service
+The clever trick
+Ollama mimics the OpenAI API at http://localhost:11434/v1.
+This means you can use the OpenAI Python SDK to talk to Ollama — just change base_url.
