@@ -1,0 +1,105 @@
+Kotlin is
+1. Statically typed - Every variable needs type needs to be mentioned.
+ 
+2. Type inference - based on the value variable type is determined 
+
+Conversation with Claude:
+
+1. STR
+
+Stage - Role, Objective, I.e. Context about your work
+
+Task - Task be specific write, analyze, summarise, 
+
+Rule - In what format output is expected Tone, Style
+
+Works well on iteration
+Follow up questions 
+Provide feedback
+Restart/ Redirect
+
+AI Fluency (How we collaborate effectively with the  AI tools)
+-------------------------
+4D Framework
+
+Delegate - Human vs AI ; Guiding principles Goal and AI capabilities 
+Describe - Effective communication with AI - Desired output/ behavior, Process
+Discernment - Evaluate the AI output, process, Interactions - evaluate based on (Quality, accuracy, areas of improvement)
+Diligence - Use AI responsibly , Take accountability make it transparent
+
+------
+
+To get better result:
+
+1. If generic output - Give Role intent <enough info about the task> tone
+
+2. If incorrect information - Ask for citation, confidence level , use web search to give response
+
+--
+
+Claude project has its own memory, context is readily available , if the context exceeds the token limit then it automatically behaves like a RAG
+
+Artifacts claude can produce documents , mermaid diagrams , png etc., as a response.
+
+Skills - skills.md file which helps us to give information for certain prompts e.g. To write a linkedIn post no need specify every time how you want to structure tone etc., once written in skills.md every time based on your prompt corresponding skills.md file is used.
+
+Connectors - To access tools like mail. Calendar via MCP
+
+Research -(Gathering more information) If we need to gather information from multiple 
+resources 
+
+Extended Thinking - Deep reasoning on complex problem without external information e.g. Coding , logical problems 
+
+Web search - To get info fact check 
+
+Use Research for comprehensive multi-source analysis; web search for quick facts; extended thinking for reasoning-heavy problems.
+
+--------
+
+I am feeling less confident about my skills in 
+Python for AI development, 
+AI driven mobile app development,
+	Demonstrate proficiency with AI tools like Vertex AI, Dialogflow, and Apple Intelligence
+Prompt driven development
+
+I feel confident when I do hands on practical exercises. so I have to study daily the following items
+
+Along with the above 3 I have to prepare the 
+
+Gen AI course that I am undergoing  mainly I want to do many hands on projects
+https://www.coursera.org/specializations/build-modernize-applications-with-generative-ai
+
+Android system design 
+Flutter
+AI engineering book reading
+
+After making good progress I am going to start GCP and other cloud architect stuffs.
+Once I gain confidence I will give interviews and doing certifications.
+
+
+It will be easy rather than finding the content daily I am planning to enroll in courses for each one which has hands on also so I can concentrate on the learning rather than on planning.
+
+This course for 
+
+https://www.coursera.org/professional-certificates/ibm-generative-ai-engineering
+
+Python for AI development, 
+Gen AI course that I am undergoing 
+
+
+
+For AI driven development
+https://www.coursera.org/specializations/gemini-for-developers
+
+https://www.coursera.org/learn/google-ai-for-app-building
+https://www.coursera.org/learn/build-generative-ai-agents-with-vertex-ai-and-flutter
+
+------------------
+Complex prompt can be divided into sub tasks.
+
+Prompt - intent classification  - For each intent model is Prompted 
+
+2 ways we can ask the model to think
+
+1. COT chain of thoughts - where we see
+
