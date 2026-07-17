@@ -27,7 +27,9 @@ curl -fsSL https://ollama.com/install.sh | sh
 
 # 2. Pull a model (choose based on your RAM)
 ollama pull phi3          # 2.7B — works on 8GB RAM
+
 ollama pull llama3.2      # 3B  — works on 8GB RAM
+
 ollama pull mistral       # 7B  — needs 16GB RAM
 
 # 3. Confirm the server is running
