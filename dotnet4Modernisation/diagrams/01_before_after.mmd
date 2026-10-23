@@ -1,0 +1,49 @@
+flowchart LR
+    subgraph BEFORE["BEFORE - ASP.NET Web Forms (.NET Framework 4.0)"]
+        direction TB
+        B_Browser["Browser<br/>(full page postbacks)"]
+        B_IIS["IIS + System.Web pipeline"]
+        B_Global["Global.asax<br/>(app entry / events)"]
+        B_Master["Site.Master<br/>(master page)"]
+        B_Pages[".aspx + .aspx.cs + .aspx.designer.cs<br/>11 Web Forms pages"]
+        B_Base["CounterPage : System.Web.UI.Page"]
+        B_Auth["FormsAuthentication<br/>+ Session state"]
+        B_Data["Static data classes<br/>Db / AuthData / CatalogData /<br/>CustomerData / OrderData"]
+        B_Cfg["Web.config<br/>(connection strings, auth, culture)"]
+        B_Sql["System.Data.SqlClient"]
+        B_DB[("SQL Server")]
+
+        B_Browser --> B_IIS --> B_Global --> B_Master --> B_Pages
+        B_Pages --> B_Base
+        B_Pages --> B_Auth
+        B_Pages --> B_Data
+        B_Data --> B_Sql --> B_DB
+        B_Cfg -.config.-> B_Global
+        B_Cfg -.ConfigurationManager.-> B_Data
+    end
+
+    subgraph AFTER["AFTER - Blazor Server (.NET 8.0)"]
+        direction TB
+        A_Browser["Browser<br/>(SignalR circuit, interactive)"]
+        A_Kestrel["Kestrel + ASP.NET Core<br/>middleware pipeline"]
+        A_Program["Program.cs<br/>(minimal hosting / DI setup)"]
+        A_App["App.razor + Routes.razor<br/>(AuthorizeRouteView)"]
+        A_Layout["MainLayout.razor<br/>(layout + NavLink nav)"]
+        A_Pages[".razor components<br/>Components/Pages/*<br/>(Account, Catalog, Customers,<br/>Orders, Reports)"]
+        A_Base["CounterPageBase : ComponentBase"]
+        A_Auth["Cookie Authentication<br/>claims-based (ClaimsPrincipal)<br/>/Logout minimal API"]
+        A_Data["Scoped DI services<br/>Db / AuthData / CatalogData /<br/>CustomerData / OrderData"]
+        A_Cfg["appsettings.json<br/>+ IConfiguration"]
+        A_Sql["Microsoft.Data.SqlClient 7.1.1"]
+        A_DB[("SQL Server")]
+
+        A_Browser --> A_Kestrel --> A_Program --> A_App --> A_Layout --> A_Pages
+        A_Pages --> A_Base
+        A_Pages --> A_Auth
+        A_Pages --> A_Data
+        A_Data --> A_Sql --> A_DB
+        A_Cfg -.IConfiguration.-> A_Program
+        A_Cfg -.GetConnectionString.-> A_Data
+    end
+
+    BEFORE ==>|AWS Transform| AFTER

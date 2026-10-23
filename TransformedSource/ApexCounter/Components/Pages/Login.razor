@@ -1,0 +1,121 @@
+@page "/Login"
+@using System.Data
+@using System.Security.Claims
+@using global::Microsoft.AspNetCore.Authentication
+@using global::Microsoft.AspNetCore.Authentication.Cookies
+@using Microsoft.Data.SqlClient
+
+<PageTitle>Sign in · Apex Counter</PageTitle>
+
+<div class="login-body">
+    <div class="login-card">
+        <p class="stamp">Apex Counter · .NET 8</p>
+        <h1>Apex Counter</h1>
+        <p>Parts desk for Apex Industrial Supply. Stock changes only when an order is picked.</p>
+        <form method="post" @formname="login" @onsubmit="HandleLogin">
+            <AntiforgeryToken />
+            <div class="row">
+                <label for="txtUser">Username</label>
+                <input id="txtUser" type="text" @bind="userName" />
+                @if (submitted && string.IsNullOrWhiteSpace(userName))
+                {
+                    <span class="err">Enter a username.</span>
+                }
+            </div>
+            <div class="row">
+                <label for="txtPassword">Password</label>
+                <input id="txtPassword" type="password" @bind="password" />
+                @if (submitted && string.IsNullOrWhiteSpace(password))
+                {
+                    <span class="err">Enter a password.</span>
+                }
+            </div>
+            <button type="submit">Sign in</button>
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <p class="err">@errorMessage</p>
+            }
+            <p class="note">Classroom sign-in: clerk or supervisor. Password counter2011.</p>
+        </form>
+    </div>
+</div>
+
+@code {
+    [Inject] private Db Db { get; set; } = default!;
+    [Inject] private IHttpContextAccessor HttpContextAccessor { get; set; } = default!;
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    [SupplyParameterFromQuery(Name = "ReturnUrl")]
+    private string? ReturnUrl { get; set; }
+
+    private string userName = string.Empty;
+    private string password = string.Empty;
+    private string errorMessage = string.Empty;
+    private bool submitted;
+
+    private async Task HandleLogin()
+    {
+        submitted = true;
+
+        if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password))
+        {
+            return;
+        }
+
+        var httpContext = HttpContextAccessor.HttpContext;
+        if (httpContext is null)
+        {
+            errorMessage = "Unable to process the sign-in request.";
+            return;
+        }
+
+        string trimmedName = userName.Trim();
+
+        try
+        {
+            DataTable table = Db.Query(
+                "SELECT UserId, DisplayName, PasswordSalt, PasswordHash FROM dbo.AppUser WHERE UserName = @name AND IsActive = 1",
+                new SqlParameter("@name", trimmedName));
+
+            if (table.Rows.Count != 1)
+            {
+                errorMessage = Messages.LoginFailed;
+                return;
+            }
+
+            DataRow row = table.Rows[0];
+            string hash = PasswordHasher.Hash(Convert.ToString(row["PasswordSalt"])!, password);
+            string stored = Convert.ToString(row["PasswordHash"])!.Trim();
+
+            if (!string.Equals(hash, stored, StringComparison.OrdinalIgnoreCase))
+            {
+                errorMessage = Messages.LoginFailed;
+                return;
+            }
+
+            int userId = Convert.ToInt32(row["UserId"]);
+            string displayName = Convert.ToString(row["DisplayName"]) ?? string.Empty;
+
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.Name, trimmedName),
+                new Claim("UserId", userId.ToString()),
+                new Claim("DisplayName", displayName)
+            };
+
+            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var principal = new ClaimsPrincipal(identity);
+
+            await httpContext.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                principal);
+        }
+        catch (SqlException)
+        {
+            errorMessage = Messages.DbDown;
+            return;
+        }
+
+        Navigation.NavigateTo(ReturnUrl ?? "/", forceLoad: true);
+    }
+}

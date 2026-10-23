@@ -122,3 +122,6 @@ logs/
 tmp/
 temp/
 config.yaml
+
+# Source packaging artifacts
+dotnet4Modernisation/src.zip

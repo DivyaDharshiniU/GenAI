@@ -1,0 +1,94 @@
+@page "/"
+@page "/Default"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+<PageTitle>Desk</PageTitle>
+
+<div class="tiles">
+    <div class="tile"><strong>@openOrders</strong><span>Open orders</span></div>
+    <div class="tile"><strong>@lowStock</strong><span>Active products at or under the reorder point</span></div>
+    <div class="tile"><strong>@todaySales</strong><span>Invoiced today</span></div>
+</div>
+<div class="card">
+    <h2>Latest orders</h2>
+    @if (recentOrders.Count == 0)
+    {
+        <p>No orders yet.</p>
+    }
+    else
+    {
+        <table class="grid">
+            <thead>
+                <tr>
+                    <th>Order</th>
+                    <th>Customer</th>
+                    <th>Status</th>
+                    <th>Opened</th>
+                    <th>Total</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < recentOrders.Count; i++)
+                {
+                    var order = recentOrders[i];
+                    <tr class="@(i % 2 == 1 ? "alt" : "")">
+                        <td>@order.OrderNumber</td>
+                        <td>@order.CompanyName</td>
+                        <td>@order.Status</td>
+                        <td>@order.CreatedAt.ToString("dd MMM yyyy HH:mm")</td>
+                        <td>@order.Total.ToString("N2")</td>
+                        <td><a href="@($"Orders/Detail?id={order.OrderId}")">Open</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    [Inject] private DeskData DeskData { get; set; } = default!;
+
+    private string openOrders = "0";
+    private string lowStock = "0";
+    private string todaySales = "0.00";
+    private List<RecentOrderRow> recentOrders = new();
+
+    protected override void OnInitialized()
+    {
+        var counts = DeskData.Counts();
+        if (counts.Rows.Count > 0)
+        {
+            var row = counts.Rows[0];
+            openOrders = Convert.ToString(row["OpenOrders"]) ?? "0";
+            lowStock = Convert.ToString(row["LowStock"]) ?? "0";
+            todaySales = Convert.ToDecimal(row["TodaySales"]).ToString("N2");
+        }
+
+        var recent = DeskData.Recent();
+        recentOrders = new List<RecentOrderRow>(recent.Rows.Count);
+        foreach (System.Data.DataRow r in recent.Rows)
+        {
+            recentOrders.Add(new RecentOrderRow
+            {
+                OrderId = Convert.ToInt32(r["OrderId"]),
+                OrderNumber = Convert.ToString(r["OrderNumber"]) ?? "",
+                CompanyName = Convert.ToString(r["CompanyName"]) ?? "",
+                Status = Convert.ToString(r["Status"]) ?? "",
+                CreatedAt = Convert.ToDateTime(r["CreatedAt"]),
+                Total = Convert.ToDecimal(r["Total"])
+            });
+        }
+    }
+
+    private sealed class RecentOrderRow
+    {
+        public int OrderId { get; set; }
+        public string OrderNumber { get; set; } = "";
+        public string CompanyName { get; set; } = "";
+        public string Status { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public decimal Total { get; set; }
+    }
+}
