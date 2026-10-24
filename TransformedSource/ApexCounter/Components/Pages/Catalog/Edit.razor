@@ -1,0 +1,201 @@
+@page "/Catalog/Edit"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using System.ComponentModel.DataAnnotations
+@using System.Data
+@using System.Globalization
+@using System.Security.Claims
+@using global::Microsoft.AspNetCore.Authorization
+@inject NavigationManager Navigation
+@inject CatalogData CatalogData
+
+<PageTitle>Product</PageTitle>
+
+<div class="card">
+    <h2>Product</h2>
+    <p class="note">Saving the price does not change lines already on an order. On hand changes only through Adjust stock. A new product starts at 0.</p>
+
+    @if (!string.IsNullOrEmpty(lblMessage))
+    {
+        <span class="msg">@lblMessage</span>
+    }
+
+    <EditForm Model="productModel" FormName="productForm" OnValidSubmit="BtnSave_Click">
+        <DataAnnotationsValidator />
+        <div class="row">
+            <label>SKU</label>
+            <input id="txtSku" type="text" maxlength="20" @bind="productModel.Sku" />
+            <ValidationMessage For="@(() => productModel.Sku)" />
+        </div>
+        <div class="row">
+            <label>Name</label>
+            <input id="txtName" type="text" maxlength="120" @bind="productModel.Name" />
+            <ValidationMessage For="@(() => productModel.Name)" />
+        </div>
+        <div class="row">
+            <label>Price</label>
+            <input id="txtPrice" type="text" @bind="productModel.Price" />
+            <ValidationMessage For="@(() => productModel.Price)" />
+        </div>
+        <div class="row">
+            <label>Reorder point</label>
+            <input id="txtReorder" type="text" @bind="productModel.Reorder" />
+            <ValidationMessage For="@(() => productModel.Reorder)" />
+        </div>
+        <div class="row">
+            <label>On hand</label>
+            <span id="lblOnHand">@onHand</span>
+        </div>
+        <div class="row">
+            <label>Active</label>
+            <input id="chkActive" type="checkbox" @bind="productModel.Active" />
+        </div>
+        <button id="btnSave" type="submit">Save</button>
+        <button id="btnCancel" type="button" class="btn quiet" @onclick="BtnCancel_Click">Back</button>
+    </EditForm>
+</div>
+
+@if (showAdjustPanel)
+{
+    <div class="card">
+        <h2>Adjust stock</h2>
+        <p class="note">Use a negative number to remove stock. Zero is refused. The reason is written on the ledger.</p>
+        <div class="row">
+            <label>Quantity change</label>
+            <input id="txtAdjustQty" type="text" @bind="adjustQty" />
+        </div>
+        <div class="row">
+            <label>Reason</label>
+            <input id="txtAdjustNote" type="text" maxlength="200" @bind="adjustNote" />
+        </div>
+        <button id="btnAdjust" type="button" @onclick="BtnAdjust_Click">Adjust</button>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "id")]
+    private int Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "saved")]
+    private string? Saved { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private ProductFormModel productModel = new();
+    private string lblMessage = string.Empty;
+    private int onHand;
+    private bool showAdjustPanel;
+
+    private string adjustQty = string.Empty;
+    private string adjustNote = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        int id = Id < 0 ? 0 : Id;
+        showAdjustPanel = id > 0;
+        if (id == 0) return;
+        LoadProduct(id);
+    }
+
+    private void BtnSave_Click()
+    {
+        decimal price;
+        int reorder;
+        if (!decimal.TryParse(productModel.Price?.Trim(), NumberStyles.Number, CultureInfo.GetCultureInfo("en-US"), out price) || price < 0)
+        {
+            lblMessage = Messages.BadPrice;
+            return;
+        }
+        if (!int.TryParse(productModel.Reorder?.Trim(), out reorder) || reorder < 0)
+        {
+            lblMessage = Messages.BadReorder;
+            return;
+        }
+
+        int id = Id < 0 ? 0 : Id;
+        ActionResult result = CatalogData.Save(id, productModel.Sku!, productModel.Name!, price, reorder, productModel.Active);
+        if (!result.Ok || id > 0)
+        {
+            lblMessage = result.Message;
+            return;
+        }
+        Navigation.NavigateTo($"/Catalog/Edit?id={result.Id}&saved=1");
+    }
+
+    private async Task BtnAdjust_Click()
+    {
+        int qty;
+        if (!int.TryParse(adjustQty?.Trim(), out qty) || qty == 0)
+        {
+            lblMessage = Messages.BadAdjust;
+            return;
+        }
+
+        int currentUserId = await GetCurrentUserIdAsync();
+
+        int id = Id < 0 ? 0 : Id;
+        ActionResult result = CatalogData.Adjust(id, qty, adjustNote, currentUserId);
+        lblMessage = result.Message;
+        if (result.Ok)
+        {
+            onHand = result.Id;
+            adjustQty = string.Empty;
+            adjustNote = string.Empty;
+        }
+    }
+
+    private void BtnCancel_Click()
+    {
+        Navigation.NavigateTo("/Catalog/List");
+    }
+
+    private void LoadProduct(int id)
+    {
+        DataRow? row = CatalogData.Find(id);
+        if (row == null)
+        {
+            lblMessage = Messages.NotFound;
+            showAdjustPanel = false;
+            return;
+        }
+        productModel.Sku = Convert.ToString(row["Sku"]);
+        productModel.Name = Convert.ToString(row["ProductName"]);
+        productModel.Price = Convert.ToDecimal(row["UnitPrice"]).ToString("N2");
+        productModel.Reorder = Convert.ToString(row["ReorderPoint"]);
+        onHand = Convert.ToInt32(row["OnHand"]);
+        productModel.Active = Convert.ToBoolean(row["IsActive"]);
+
+        if (Saved == "1")
+        {
+            lblMessage = string.Format(Messages.ProductSaved, productModel.Sku);
+        }
+    }
+
+    private async Task<int> GetCurrentUserIdAsync()
+    {
+        if (AuthState is null) return 0;
+        var authState = await AuthState;
+        var userIdClaim = authState.User.FindFirst("UserId");
+        return userIdClaim != null ? Convert.ToInt32(userIdClaim.Value) : 0;
+    }
+
+    public class ProductFormModel
+    {
+        [Required(ErrorMessage = "Enter a SKU.")]
+        [MaxLength(20)]
+        public string? Sku { get; set; }
+
+        [Required(ErrorMessage = "Enter a name.")]
+        [MaxLength(120)]
+        public string? Name { get; set; }
+
+        [Required(ErrorMessage = "Enter a price.")]
+        public string? Price { get; set; }
+
+        [Required(ErrorMessage = "Enter a reorder point.")]
+        public string? Reorder { get; set; }
+
+        public bool Active { get; set; } = true;
+    }
+}

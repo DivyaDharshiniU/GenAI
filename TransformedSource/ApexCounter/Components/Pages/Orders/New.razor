@@ -1,0 +1,261 @@
+@page "/Orders/New"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using System.Data
+@inject OrderData OrderData
+@inject CatalogData CatalogData
+
+<PageTitle>New order</PageTitle>
+
+<div class="card">
+    <h2>New order</h2>
+    <p class="note">Tax is 5 percent, rounded half away from zero to two decimals. The price is copied onto the line. A later catalog price change does not rewrite this order. Saving leaves the order Open and does not touch stock. The same SKU on a second add increases the quantity and keeps the first price.</p>
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <span class="msg">@message</span>
+    }
+
+    <div class="row">
+        <label>Customer</label>
+        <select id="ddlCustomer" value="@selectedCustomerId" @onchange="OnCustomerChanged">
+            <option value="0">Choose a customer</option>
+            @if (customers != null)
+            {
+                @foreach (DataRow row in customers.Rows)
+                {
+                    <option value="@Convert.ToString(row["CustomerId"])">@Convert.ToString(row["Label"])</option>
+                }
+            }
+        </select>
+    </div>
+    <div class="row">
+        <label>Product</label>
+        <select id="ddlProduct" value="@selectedProductId" @onchange="OnProductChanged">
+            <option value="0">Choose a product</option>
+            @if (products != null)
+            {
+                @foreach (DataRow row in products.Rows)
+                {
+                    <option value="@Convert.ToString(row["ProductId"])">@Convert.ToString(row["Label"])</option>
+                }
+            }
+        </select>
+        <input id="txtQty" type="text" @bind="qtyText" style="width:60px" />
+        <button @onclick="BtnAddClick">Add line</button>
+    </div>
+
+    @if (draft.Rows.Count == 0)
+    {
+        <table class="grid">
+            <tbody>
+                <tr><td>No lines yet.</td></tr>
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <table class="grid">
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Name</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Line</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < draft.Rows.Count; i++)
+                {
+                    var index = i;
+                    var row = draft.Rows[index];
+                    <tr class="@(index % 2 == 1 ? "alt" : "")">
+                        <td>@Convert.ToString(row["Sku"])</td>
+                        <td>@Convert.ToString(row["ProductName"])</td>
+                        <td>@Convert.ToInt32(row["Quantity"])</td>
+                        <td>@Convert.ToDecimal(row["UnitPrice"]).ToString("N2")</td>
+                        <td>@Convert.ToDecimal(row["LineTotal"]).ToString("N2")</td>
+                        <td><a href="#" @onclick="() => RemoveLine(index)" @onclick:preventDefault>Remove</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="totals">
+        <div>Subtotal @subtotal.ToString("N2")</div>
+        <div>Tax @tax.ToString("N2")</div>
+        <div>Total @total.ToString("N2")</div>
+    </div>
+    <button @onclick="BtnSaveClick">Open order</button>
+    <button class="btn quiet" @onclick="BtnClearClick">Clear draft</button>
+</div>
+
+@code {
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private DataTable? customers;
+    private DataTable? products;
+    private DataTable draft = CreateEmptyDraft();
+
+    private string selectedCustomerId = "0";
+    private string selectedProductId = "0";
+    private string qtyText = "1";
+    private string message = string.Empty;
+
+    private decimal subtotal;
+    private decimal tax;
+    private decimal total;
+
+    protected override async Task OnInitializedAsync()
+    {
+        customers = OrderData.ActiveCustomers();
+        products = CatalogData.ActiveForOrder();
+        RecalculateTotals();
+        await Task.CompletedTask;
+    }
+
+    private void OnCustomerChanged(ChangeEventArgs e)
+    {
+        selectedCustomerId = e.Value?.ToString() ?? "0";
+    }
+
+    private void OnProductChanged(ChangeEventArgs e)
+    {
+        selectedProductId = e.Value?.ToString() ?? "0";
+    }
+
+    private void BtnAddClick()
+    {
+        int productId;
+        int quantity;
+        if (!int.TryParse(selectedProductId, out productId) || productId <= 0)
+        {
+            message = Messages.NeedProduct;
+            return;
+        }
+        if (!int.TryParse(qtyText?.Trim(), out quantity) || quantity < 1)
+        {
+            message = Messages.QtyRequired;
+            return;
+        }
+
+        DataRow? product = CatalogData.Find(productId);
+        if (product == null)
+        {
+            message = Messages.NotFound;
+            return;
+        }
+        if (!Convert.ToBoolean(product["IsActive"]))
+        {
+            message = Messages.ProductInactive;
+            return;
+        }
+
+        DataRow? existing = null;
+        foreach (DataRow row in draft.Rows)
+        {
+            if (Convert.ToInt32(row["ProductId"]) == productId) existing = row;
+        }
+
+        if (existing == null)
+        {
+            DataRow line = draft.NewRow();
+            line["ProductId"] = productId;
+            line["Sku"] = product["Sku"];
+            line["ProductName"] = product["ProductName"];
+            line["Quantity"] = quantity;
+            line["UnitPrice"] = product["UnitPrice"];
+            line["LineTotal"] = Money.LineTotal(quantity, Convert.ToDecimal(product["UnitPrice"]));
+            draft.Rows.Add(line);
+            message = string.Format(Messages.LineAdded, product["Sku"]);
+        }
+        else
+        {
+            int nextQty = Convert.ToInt32(existing["Quantity"]) + quantity;
+            existing["Quantity"] = nextQty;
+            existing["LineTotal"] = Money.LineTotal(nextQty, Convert.ToDecimal(existing["UnitPrice"]));
+            message = string.Format(Messages.LineMerged, quantity, existing["Sku"], nextQty);
+        }
+
+        RecalculateTotals();
+    }
+
+    private void RemoveLine(int index)
+    {
+        if (index < 0 || index >= draft.Rows.Count) return;
+        draft.Rows.RemoveAt(index);
+        message = "";
+        RecalculateTotals();
+    }
+
+    private async Task BtnSaveClick()
+    {
+        int customerId;
+        if (!int.TryParse(selectedCustomerId, out customerId) || customerId <= 0)
+        {
+            message = Messages.NeedCustomer;
+            return;
+        }
+
+        int userId = await GetCurrentUserIdAsync();
+        ActionResult result = OrderData.CreateOpen(customerId, userId, draft);
+        if (!result.Ok)
+        {
+            message = result.Message;
+            return;
+        }
+
+        draft = CreateEmptyDraft();
+        Navigation.NavigateTo("/Orders/Detail?id=" + result.Id.ToString(), forceLoad: false);
+    }
+
+    private void BtnClearClick()
+    {
+        draft = CreateEmptyDraft();
+        message = "";
+        RecalculateTotals();
+    }
+
+    private void RecalculateTotals()
+    {
+        decimal sub = 0m;
+        foreach (DataRow row in draft.Rows)
+        {
+            sub += Convert.ToDecimal(row["LineTotal"]);
+        }
+        subtotal = Money.Round(sub);
+        tax = Money.Tax(subtotal);
+        total = Money.Round(subtotal + tax);
+    }
+
+    private async Task<int> GetCurrentUserIdAsync()
+    {
+        if (AuthState != null)
+        {
+            var authState = await AuthState;
+            var claim = authState.User.FindFirst("UserId");
+            if (claim != null && int.TryParse(claim.Value, out int id))
+            {
+                return id;
+            }
+        }
+        return 0;
+    }
+
+    private static DataTable CreateEmptyDraft()
+    {
+        var table = new DataTable();
+        table.Columns.Add("ProductId", typeof(int));
+        table.Columns.Add("Sku", typeof(string));
+        table.Columns.Add("ProductName", typeof(string));
+        table.Columns.Add("Quantity", typeof(int));
+        table.Columns.Add("UnitPrice", typeof(decimal));
+        table.Columns.Add("LineTotal", typeof(decimal));
+        return table;
+    }
+}

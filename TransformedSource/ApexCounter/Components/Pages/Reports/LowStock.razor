@@ -1,0 +1,125 @@
+@page "/Reports/LowStock"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject CatalogData CatalogData
+
+<PageTitle>Low stock</PageTitle>
+
+<div class="card">
+    <h2>Low stock</h2>
+    <p class="note">Active products only, where on hand is at or under the reorder point. Inactive products stay off this report even when they are low. The catalog filter is the list that includes them.</p>
+    <p><span>@totalCount</span> active products</p>
+
+    @if (pagedRows.Count == 0)
+    {
+        <p>Nothing is low.</p>
+    }
+    else
+    {
+        <table class="grid">
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Name</th>
+                    <th>Price</th>
+                    <th>On hand</th>
+                    <th>Reorder</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < pagedRows.Count; i++)
+                {
+                    var row = pagedRows[i];
+                    <tr class="@(i % 2 == 1 ? "alt low" : "low")">
+                        <td>@row.Sku</td>
+                        <td>@row.ProductName</td>
+                        <td>@row.UnitPrice.ToString("N2")</td>
+                        <td>@row.OnHand</td>
+                        <td>@row.ReorderPoint</td>
+                        <td><NavLink href="@($"Catalog/Edit?id={row.ProductId}")">Open</NavLink></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (totalPages > 1)
+        {
+            <div class="pager">
+                @for (int p = 0; p < totalPages; p++)
+                {
+                    int pageIndex = p;
+                    if (pageIndex == currentPage)
+                    {
+                        <span>@(pageIndex + 1)</span>
+                    }
+                    else
+                    {
+                        <a href="#" @onclick="() => GoToPage(pageIndex)" @onclick:preventDefault>@(pageIndex + 1)</a>
+                    }
+                    @(" ")
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private const int PageSize = 4;
+
+    private List<LowStockRow> allRows = new();
+    private List<LowStockRow> pagedRows = new();
+    private int totalCount;
+    private int currentPage;
+    private int totalPages;
+
+    protected override void OnInitialized()
+    {
+        BindGrid();
+    }
+
+    private void GoToPage(int pageIndex)
+    {
+        currentPage = pageIndex;
+        ApplyPaging();
+    }
+
+    private void BindGrid()
+    {
+        System.Data.DataTable table = CatalogData.LowStockReport();
+        totalCount = table.Rows.Count;
+        allRows = new List<LowStockRow>(totalCount);
+        foreach (System.Data.DataRow dr in table.Rows)
+        {
+            allRows.Add(new LowStockRow
+            {
+                ProductId = Convert.ToInt32(dr["ProductId"]),
+                Sku = Convert.ToString(dr["Sku"]) ?? string.Empty,
+                ProductName = Convert.ToString(dr["ProductName"]) ?? string.Empty,
+                UnitPrice = Convert.ToDecimal(dr["UnitPrice"]),
+                OnHand = Convert.ToInt32(dr["OnHand"]),
+                ReorderPoint = Convert.ToInt32(dr["ReorderPoint"])
+            });
+        }
+        currentPage = 0;
+        ApplyPaging();
+    }
+
+    private void ApplyPaging()
+    {
+        totalPages = (int)Math.Ceiling((double)allRows.Count / PageSize);
+        if (totalPages == 0) totalPages = 1;
+        if (currentPage >= totalPages) currentPage = totalPages - 1;
+        pagedRows = allRows.Skip(currentPage * PageSize).Take(PageSize).ToList();
+    }
+
+    private sealed class LowStockRow
+    {
+        public int ProductId { get; set; }
+        public string Sku { get; set; } = string.Empty;
+        public string ProductName { get; set; } = string.Empty;
+        public decimal UnitPrice { get; set; }
+        public int OnHand { get; set; }
+        public int ReorderPoint { get; set; }
+    }
+}

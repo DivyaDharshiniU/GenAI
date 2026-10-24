@@ -1,0 +1,45 @@
+flowchart LR
+    subgraph OLD["Web Forms (.NET Framework 4.0)"]
+        direction TB
+        O1["Global.asax / Global.asax.cs"]
+        O2["Site.Master (.master)"]
+        O3[".aspx pages (11)"]
+        O4[".aspx.cs code-behind"]
+        O5[".aspx.designer.cs"]
+        O6["CounterPage : Page"]
+        O7["FormsAuthentication + Session"]
+        O8["Static classes (Db, *Data)"]
+        O9["ConfigurationManager"]
+        O10["System.Data.SqlClient"]
+        O11["Web.config"]
+        O12["Legacy .csproj (net40)"]
+    end
+
+    subgraph NEW["Blazor Server (.NET 8.0)"]
+        direction TB
+        N1["Program.cs"]
+        N2["MainLayout.razor + App.razor"]
+        N3[".razor components"]
+        N4["@code blocks in .razor"]
+        N5["(removed - no designer files)"]
+        N6["CounterPageBase : ComponentBase"]
+        N7["Cookie auth (claims) + /Logout API"]
+        N8["Scoped DI services"]
+        N9["IConfiguration (constructor injection)"]
+        N10["Microsoft.Data.SqlClient 7.1.1"]
+        N11["appsettings.json"]
+        N12["SDK-style .csproj (net8.0, Sdk.Web)"]
+    end
+
+    O1 --> N1
+    O2 --> N2
+    O3 --> N3
+    O4 --> N4
+    O5 --> N5
+    O6 --> N6
+    O7 --> N7
+    O8 --> N8
+    O9 --> N9
+    O10 --> N10
+    O11 --> N11
+    O12 --> N12

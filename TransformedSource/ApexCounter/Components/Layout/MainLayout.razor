@@ -1,0 +1,57 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject IConfiguration Configuration
+@using Microsoft.Data.SqlClient
+
+<div class="top">
+    <p class="stamp">Blazor Server &middot; .NET 8</p>
+    <h1>Apex Counter</h1>
+    <AuthorizeView>
+        <Authorized>
+            <p class="who">Signed in as @context.User.FindFirst("DisplayName")?.Value</p>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+<div class="nav">
+    <NavLink href="" Match="NavLinkMatch.All">Desk</NavLink>
+    <NavLink href="Customers/List">Customers</NavLink>
+    <NavLink href="Catalog/List">Catalog</NavLink>
+    <NavLink href="Orders/List">Orders</NavLink>
+    <NavLink href="Orders/New">New order</NavLink>
+    <NavLink href="Reports/LowStock">Low stock</NavLink>
+    <NavLink href="Account/Password">Password</NavLink>
+    <AuthorizeView>
+        <Authorized>
+            <a class="out" href="Logout">Sign out</a>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+<div class="page">
+    @if (showDatabaseDown)
+    {
+        <div class="banner">@Messages.DbDown</div>
+    }
+    @Body
+</div>
+
+@code {
+    private bool showDatabaseDown;
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            // Verify database connectivity on layout load, mirroring the
+            // original Site.Master Page_Load behaviour that caught SqlException.
+            string? cs = Configuration.GetConnectionString("DefaultConnection");
+            using var connection = new SqlConnection(cs);
+            connection.Open();
+        }
+        catch (SqlException)
+        {
+            showDatabaseDown = true;
+        }
+    }
+}

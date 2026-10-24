@@ -1,0 +1,152 @@
+@page "/Orders/List"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject OrderData OrderData
+
+<PageTitle>Orders</PageTitle>
+
+<div class="card">
+    <h2>Orders</h2>
+    <div class="row">
+        <select id="ddlStatus" value="@ddlStatus" @onchange="OnStatusChanged">
+            <option value="all">All statuses</option>
+            <option value="Open">Open</option>
+            <option value="Picked">Picked</option>
+            <option value="Invoiced">Invoiced</option>
+            <option value="Cancelled">Cancelled</option>
+        </select>
+        <input id="txtCustomer" type="text" @bind="txtCustomer" />
+        <button @onclick="BtnFilterClick">Filter</button>
+        <a href="/Orders/New">New order</a>
+    </div>
+
+    @if (pagedOrders.Count == 0)
+    {
+        <p>No orders.</p>
+    }
+    else
+    {
+        <table class="grid">
+            <thead>
+                <tr>
+                    <th>Order</th>
+                    <th>Customer</th>
+                    <th>Status</th>
+                    <th>Opened</th>
+                    <th>Total</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < pagedOrders.Count; i++)
+                {
+                    var row = pagedOrders[i];
+                    <tr class="@(i % 2 == 1 ? "alt" : "")">
+                        <td>@row.OrderNumber</td>
+                        <td>@row.CompanyName</td>
+                        <td>@row.Status</td>
+                        <td>@row.CreatedAt.ToString("dd MMM yyyy HH:mm")</td>
+                        <td>@row.Total.ToString("N2")</td>
+                        <td><a href="@($"/Orders/Detail?id={row.OrderId}")">Open</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (totalPages > 1)
+        {
+            <div class="pager">
+                @for (int p = 0; p < totalPages; p++)
+                {
+                    int pageIndex = p;
+                    if (pageIndex == currentPageIndex)
+                    {
+                        <span><strong>@(pageIndex + 1)</strong></span>
+                    }
+                    else
+                    {
+                        <a href="#" @onclick="() => GoToPage(pageIndex)" @onclick:preventDefault>@(pageIndex + 1)</a>
+                    }
+                    @:&nbsp;
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private string ddlStatus = "all";
+    private string txtCustomer = string.Empty;
+
+    private List<OrderRow> allOrders = new();
+    private List<OrderRow> pagedOrders = new();
+    private int currentPageIndex;
+    private int totalPages;
+    private const int PageSize = 5;
+
+    protected override void OnInitialized()
+    {
+        BindGrid();
+    }
+
+    private void BtnFilterClick()
+    {
+        currentPageIndex = 0;
+        BindGrid();
+    }
+
+    private void OnStatusChanged(ChangeEventArgs e)
+    {
+        ddlStatus = e.Value?.ToString() ?? "all";
+    }
+
+    private void GoToPage(int pageIndex)
+    {
+        currentPageIndex = pageIndex;
+        ApplyPaging();
+    }
+
+    private void BindGrid()
+    {
+        var dt = OrderData.List(ddlStatus, txtCustomer);
+        allOrders = new List<OrderRow>();
+        foreach (System.Data.DataRow row in dt.Rows)
+        {
+            allOrders.Add(new OrderRow
+            {
+                OrderId = Convert.ToInt32(row["OrderId"]),
+                OrderNumber = Convert.ToString(row["OrderNumber"]) ?? string.Empty,
+                CompanyName = Convert.ToString(row["CompanyName"]) ?? string.Empty,
+                Status = Convert.ToString(row["Status"]) ?? string.Empty,
+                CreatedAt = Convert.ToDateTime(row["CreatedAt"]),
+                Total = Convert.ToDecimal(row["Total"])
+            });
+        }
+
+        ApplyPaging();
+    }
+
+    private void ApplyPaging()
+    {
+        totalPages = (int)Math.Ceiling((double)allOrders.Count / PageSize);
+        if (currentPageIndex >= totalPages && totalPages > 0)
+        {
+            currentPageIndex = totalPages - 1;
+        }
+
+        pagedOrders = allOrders
+            .Skip(currentPageIndex * PageSize)
+            .Take(PageSize)
+            .ToList();
+    }
+
+    private sealed class OrderRow
+    {
+        public int OrderId { get; set; }
+        public string OrderNumber { get; set; } = string.Empty;
+        public string CompanyName { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public decimal Total { get; set; }
+    }
+}

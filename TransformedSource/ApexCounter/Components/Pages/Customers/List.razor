@@ -1,0 +1,138 @@
+@page "/Customers/List"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using System.Data
+@using Microsoft.AspNetCore.Authorization
+@inject CustomerData CustomerData
+
+<PageTitle>Customers</PageTitle>
+
+<div class="card">
+    <h2>Customers</h2>
+    <p class="note">Opens on active accounts. Retired Yard Co. is inactive and stays off this list until you choose All or Inactive.</p>
+    <div class="row">
+        <input type="text" id="txtSearch" @bind="searchTerm" />
+        <select id="ddlActive" value="@activeFilter" @onchange="OnActiveFilterChanged">
+            <option value="all">All</option>
+            <option value="yes" selected>Active</option>
+            <option value="no">Inactive</option>
+        </select>
+        <button @onclick="Search">Search</button>
+        <a href="Customers/Edit">New customer</a>
+    </div>
+
+    @if (pagedRows.Count == 0)
+    {
+        <p>No customers.</p>
+    }
+    else
+    {
+        <table class="grid">
+            <thead>
+                <tr>
+                    <th>Account</th>
+                    <th>Company</th>
+                    <th>Contact</th>
+                    <th>Phone</th>
+                    <th>City</th>
+                    <th>Active</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @{ bool alt = false; }
+                @foreach (var row in pagedRows)
+                {
+                    <tr class="@(alt ? "alt" : "")">
+                        <td>@row["AccountCode"]</td>
+                        <td>@row["CompanyName"]</td>
+                        <td>@row["ContactName"]</td>
+                        <td>@row["Phone"]</td>
+                        <td>@row["City"]</td>
+                        <td>@row["ActiveText"]</td>
+                        <td><a href="@($"Customers/Edit?id={row["CustomerId"]}")">Open</a></td>
+                    </tr>
+                    alt = !alt;
+                }
+            </tbody>
+        </table>
+
+        @if (totalPages > 1)
+        {
+            <div class="pager">
+                @for (int i = 0; i < totalPages; i++)
+                {
+                    int pageIndex = i;
+                    if (pageIndex == currentPageIndex)
+                    {
+                        <span>@(pageIndex + 1)</span>
+                    }
+                    else
+                    {
+                        <a href="#" @onclick="() => GoToPage(pageIndex)" @onclick:preventDefault>@(pageIndex + 1)</a>
+                    }
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private string searchTerm = string.Empty;
+    private string activeFilter = "yes";
+    private DataTable? allRows;
+    private List<DataRow> pagedRows = new();
+    private int currentPageIndex;
+    private int totalPages;
+    private const int PageSize = 5;
+
+    protected override void OnInitialized()
+    {
+        BindGrid();
+    }
+
+    private void Search()
+    {
+        currentPageIndex = 0;
+        BindGrid();
+    }
+
+    private void OnActiveFilterChanged(ChangeEventArgs e)
+    {
+        activeFilter = e.Value?.ToString() ?? "yes";
+    }
+
+    private void GoToPage(int pageIndex)
+    {
+        currentPageIndex = pageIndex;
+        ApplyPaging();
+    }
+
+    private void BindGrid()
+    {
+        allRows = CustomerData.List(searchTerm, activeFilter);
+        ApplyPaging();
+    }
+
+    private void ApplyPaging()
+    {
+        if (allRows == null || allRows.Rows.Count == 0)
+        {
+            pagedRows = new();
+            totalPages = 0;
+            return;
+        }
+
+        int totalRows = allRows.Rows.Count;
+        totalPages = (int)Math.Ceiling((double)totalRows / PageSize);
+
+        if (currentPageIndex >= totalPages)
+            currentPageIndex = totalPages - 1;
+
+        pagedRows = allRows.Rows
+            .Cast<DataRow>()
+            .Skip(currentPageIndex * PageSize)
+            .Take(PageSize)
+            .ToList();
+    }
+}

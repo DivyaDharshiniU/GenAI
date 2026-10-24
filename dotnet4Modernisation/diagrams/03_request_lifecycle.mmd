@@ -1,0 +1,19 @@
+sequenceDiagram
+    participant U as Browser
+    participant S as Server
+
+    Note over U,S: BEFORE - Web Forms (stateless postbacks)
+    U->>S: HTTP GET/POST (full page)
+    S->>S: Page lifecycle (Init->Load->Render)
+    S->>S: FormsAuth cookie + Session lookup
+    S->>S: Static Db.Method() -> SQL Server
+    S-->>U: Full HTML page (ViewState)
+
+    Note over U,S: AFTER - Blazor Server (persistent circuit)
+    U->>S: Initial HTTP GET
+    S-->>U: Rendered HTML + blazor.server.js
+    U->>S: Open SignalR circuit (WebSocket)
+    U->>S: UI event over circuit
+    S->>S: Cookie auth (ClaimsPrincipal)
+    S->>S: Scoped service (_db) -> SQL Server
+    S-->>U: DOM diff over SignalR
