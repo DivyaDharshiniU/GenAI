@@ -1,0 +1,115 @@
+@page "/Login"
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@using Microsoft.Data.SqlClient
+
+<!-- PORT-TODO -->
+<!-- {"note": "Login.aspx had its own full HTML (no MasterPageFile). If the default layout adds site navigation chrome, consider adding a separate minimal layout for the login page and setting @@layout here."} -->
+
+<PageTitle>Sign in · Apex Counter</PageTitle>
+
+<div class="login-body">
+    <div class="login-card">
+        <p class="stamp">Blazor · .NET 8</p>
+        <h1>Apex Counter</h1>
+        <p>Parts desk for Apex Industrial Supply. Stock changes only when an order is picked.</p>
+        <EditForm Model="loginModel" FormName="loginForm" OnValidSubmit="HandleLogin">
+            <DataAnnotationsValidator />
+            <div class="row">
+                <label for="txtUser">Username</label>
+                <InputText id="txtUser" @bind-Value="loginModel.UserName" />
+                <ValidationMessage For="@(() => loginModel.UserName)" />
+            </div>
+            <div class="row">
+                <label for="txtPassword">Password</label>
+                <InputText id="txtPassword" type="password" @bind-Value="loginModel.Password" />
+                <ValidationMessage For="@(() => loginModel.Password)" />
+            </div>
+            <button type="submit">Sign in</button>
+            <p class="err">@errorMessage</p>
+            <p class="note">Classroom sign-in: clerk or supervisor. Password counter2011.</p>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    [SupplyParameterFromForm]
+    private LoginModel loginModel { get; set; } = new();
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = default!;
+
+    [Inject]
+    private AuthData AuthData { get; set; } = default!;
+
+    private string errorMessage = string.Empty;
+
+    private async Task HandleLogin()
+    {
+        if (HttpContext is null)
+            return;
+
+        string? error;
+        try
+        {
+            if (!AuthData.TryLogin(loginModel.UserName!, loginModel.Password!, out error))
+            {
+                errorMessage = error ?? Messages.LoginFailed;
+                return;
+            }
+        }
+        catch (SqlException)
+        {
+            errorMessage = Messages.DbDown;
+            return;
+        }
+
+        // Build claims from the authenticated user — AuthData.TryLogin validated credentials
+        // against the database. In the legacy app, Remember() put UserId and DisplayName
+        // into Session; here we store them as claims in the auth cookie.
+        var userName = loginModel.UserName!.Trim();
+
+        var table = Db.Query(
+            "SELECT UserId, DisplayName FROM dbo.AppUser WHERE UserName = @name AND IsActive = 1",
+            new SqlParameter("@name", userName));
+
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.Name, userName)
+        };
+
+        if (table.Rows.Count == 1)
+        {
+            var row = table.Rows[0];
+            claims.Add(new Claim("UserId", Convert.ToString(row["UserId"])!));
+            claims.Add(new Claim("DisplayName", Convert.ToString(row["DisplayName"])!));
+        }
+
+        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        var principal = new ClaimsPrincipal(identity);
+
+        await HttpContext.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            principal);
+
+        var redirect = string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl;
+        Navigation.NavigateTo(redirect, forceLoad: true);
+    }
+
+    private sealed class LoginModel
+    {
+        [Required(ErrorMessage = "Enter a username.")]
+        public string? UserName { get; set; }
+
+        [Required(ErrorMessage = "Enter a password.")]
+        public string? Password { get; set; }
+    }
+}

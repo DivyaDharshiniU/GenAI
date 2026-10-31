@@ -1,0 +1,82 @@
+@page "/"
+@page "/Default"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+<PageTitle>Desk</PageTitle>
+
+@if (dbError)
+{
+    <div class="banner">
+        <span>The database is not available right now.</span>
+    </div>
+}
+else
+{
+    <div class="tiles">
+        <div class="tile"><strong>@lblOpen</strong><span>Open orders</span></div>
+        <div class="tile"><strong>@lblLow</strong><span>Active products at or under the reorder point</span></div>
+        <div class="tile"><strong>@lblSales</strong><span>Invoiced today</span></div>
+    </div>
+    <div class="card">
+        <h2>Latest orders</h2>
+        @if (recentOrders == null || recentOrders.Rows.Count == 0)
+        {
+            <p>No orders yet.</p>
+        }
+        else
+        {
+            <table class="grid">
+                <thead>
+                    <tr>
+                        <th>Order</th>
+                        <th>Customer</th>
+                        <th>Status</th>
+                        <th>Opened</th>
+                        <th>Total</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (int i = 0; i < recentOrders.Rows.Count; i++)
+                    {
+                        var row = recentOrders.Rows[i];
+                        <tr class="@(i % 2 == 1 ? "alt" : "")">
+                            <td>@row["OrderNumber"]</td>
+                            <td>@row["CompanyName"]</td>
+                            <td>@row["Status"]</td>
+                            <td>@(Convert.ToDateTime(row["CreatedAt"]).ToString("dd MMM yyyy HH:mm"))</td>
+                            <td>@(Convert.ToDecimal(row["Total"]).ToString("N2"))</td>
+                            <td><a href="@($"Orders/Detail?id={row["OrderId"]}")">Open</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+@code {
+    private string lblOpen = "0";
+    private string lblLow = "0";
+    private string lblSales = "0.00";
+    private System.Data.DataTable? recentOrders;
+    private bool dbError;
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            System.Data.DataTable counts = DeskData.Counts();
+            System.Data.DataRow row = counts.Rows[0];
+            lblOpen = Convert.ToString(row["OpenOrders"]) ?? "0";
+            lblLow = Convert.ToString(row["LowStock"]) ?? "0";
+            lblSales = Convert.ToDecimal(row["TodaySales"]).ToString("N2");
+            recentOrders = DeskData.Recent();
+        }
+        catch (Microsoft.Data.SqlClient.SqlException)
+        {
+            dbError = true;
+        }
+    }
+}

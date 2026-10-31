@@ -1,0 +1,137 @@
+@page "/Orders/List"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+<PageTitle>Orders</PageTitle>
+
+<div class="card">
+    <h2>Orders</h2>
+    <div class="row">
+        <select id="ddlStatus" value="@ddlStatus" @onchange="OnStatusChanged">
+            <option value="all">All statuses</option>
+            <option value="Open">Open</option>
+            <option value="Picked">Picked</option>
+            <option value="Invoiced">Invoiced</option>
+            <option value="Cancelled">Cancelled</option>
+        </select>
+        <input id="txtCustomer" type="text" @bind="txtCustomer" />
+        <button @onclick="BtnFilter_Click">Filter</button>
+        <a href="Orders/New">New order</a>
+    </div>
+
+    @if (pagedRows is not null && pagedRows.Count > 0)
+    {
+        <table class="grid">
+            <thead>
+                <tr>
+                    <th>Order</th>
+                    <th>Customer</th>
+                    <th>Status</th>
+                    <th>Opened</th>
+                    <th>Total</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < pagedRows.Count; i++)
+                {
+                    var row = pagedRows[i];
+                    var rowClass = (i % 2 == 1) ? "alt" : "";
+                    <tr class="@rowClass">
+                        <td>@row["OrderNumber"]</td>
+                        <td>@row["CompanyName"]</td>
+                        <td>@row["Status"]</td>
+                        <td>@(Convert.ToDateTime(row["CreatedAt"]).ToString("dd MMM yyyy HH:mm"))</td>
+                        <td>@(Convert.ToDecimal(row["Total"]).ToString("N2"))</td>
+                        <td><a href="@($"Orders/Detail?id={row["OrderId"]}")">Open</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (totalPages > 1)
+        {
+            <div class="pager">
+                @for (int p = 0; p < totalPages; p++)
+                {
+                    var pageIndex = p;
+                    if (pageIndex == currentPage)
+                    {
+                        <span><strong>@(pageIndex + 1)</strong></span>
+                    }
+                    else
+                    {
+                        <a href="#" @onclick="() => GoToPage(pageIndex)" @onclick:preventDefault>@(pageIndex + 1)</a>
+                    }
+                    @if (p < totalPages - 1)
+                    {
+                        <text>&nbsp;</text>
+                    }
+                }
+            </div>
+        }
+    }
+    else if (pagedRows is not null)
+    {
+        <p>No orders.</p>
+    }
+</div>
+
+@code {
+    private string ddlStatus = "all";
+    private string txtCustomer = string.Empty;
+
+    private System.Data.DataTable? allRows;
+    private List<System.Data.DataRow>? pagedRows;
+    private int currentPage;
+    private int totalPages;
+    private const int PageSize = 5;
+
+    protected override void OnInitialized()
+    {
+        BindGrid();
+    }
+
+    private void BtnFilter_Click()
+    {
+        currentPage = 0;
+        BindGrid();
+    }
+
+    private void OnStatusChanged(ChangeEventArgs e)
+    {
+        ddlStatus = e.Value?.ToString() ?? "all";
+    }
+
+    private void GoToPage(int pageIndex)
+    {
+        currentPage = pageIndex;
+        ApplyPaging();
+    }
+
+    private void BindGrid()
+    {
+        allRows = OrderData.List(ddlStatus, txtCustomer);
+        ApplyPaging();
+    }
+
+    private void ApplyPaging()
+    {
+        if (allRows is null || allRows.Rows.Count == 0)
+        {
+            pagedRows = new List<System.Data.DataRow>();
+            totalPages = 0;
+            return;
+        }
+
+        var allRowsList = allRows.Rows.Cast<System.Data.DataRow>().ToList();
+        totalPages = (int)Math.Ceiling((double)allRowsList.Count / PageSize);
+        if (currentPage >= totalPages) currentPage = totalPages - 1;
+        if (currentPage < 0) currentPage = 0;
+
+        pagedRows = allRowsList
+            .Skip(currentPage * PageSize)
+            .Take(PageSize)
+            .ToList();
+    }
+}

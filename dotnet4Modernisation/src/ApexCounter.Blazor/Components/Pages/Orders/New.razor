@@ -1,0 +1,270 @@
+@page "/Orders/New"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+<PageTitle>New order</PageTitle>
+
+<div class="card">
+    <h2>New order</h2>
+    <p class="note">Tax is 5 percent, rounded half away from zero to two decimals. The price is copied onto the line. A later catalog price change does not rewrite this order. Saving leaves the order Open and does not touch stock. The same SKU on a second add increases the quantity and keeps the first price.</p>
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <span class="msg">@message</span>
+    }
+
+    <div class="row">
+        <label>Customer</label>
+        <select id="ddlCustomer" value="@selectedCustomerId" @onchange="OnCustomerChanged">
+            <option value="0">Choose a customer</option>
+            @foreach (System.Data.DataRow row in customers.Rows)
+            {
+                <option value="@Convert.ToString(row["CustomerId"])">@Convert.ToString(row["Label"])</option>
+            }
+        </select>
+    </div>
+
+    <div class="row">
+        <label>Product</label>
+        <select id="ddlProduct" value="@selectedProductId" @onchange="OnProductChanged">
+            <option value="0">Choose a product</option>
+            @foreach (System.Data.DataRow row in products.Rows)
+            {
+                <option value="@Convert.ToString(row["ProductId"])">@Convert.ToString(row["Label"])</option>
+            }
+        </select>
+        <input id="txtQty" type="text" @bind="quantityText" style="width:60px" />
+        <button @onclick="BtnAddClick">Add line</button>
+    </div>
+
+    @if (draftLines.Count == 0)
+    {
+        <p>No lines yet.</p>
+    }
+    else
+    {
+        <table class="grid">
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Name</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Line</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < draftLines.Count; i++)
+                {
+                    var line = draftLines[i];
+                    var index = i;
+                    <tr class="@(i % 2 == 1 ? "alt" : "")">
+                        <td>@line.Sku</td>
+                        <td>@line.ProductName</td>
+                        <td>@line.Quantity</td>
+                        <td>@line.UnitPrice.ToString("N2")</td>
+                        <td>@line.LineTotal.ToString("N2")</td>
+                        <td><a href="#" @onclick="() => RemoveLine(index)" @onclick:preventDefault>Remove</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="totals">
+        <div>Subtotal @subtotal.ToString("N2")</div>
+        <div>Tax @tax.ToString("N2")</div>
+        <div>Total @total.ToString("N2")</div>
+    </div>
+
+    <button @onclick="BtnSaveClick">Open order</button>
+    <button class="btn quiet" @onclick="BtnClearClick">Clear draft</button>
+</div>
+
+@code {
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private System.Data.DataTable customers = new System.Data.DataTable();
+    private System.Data.DataTable products = new System.Data.DataTable();
+    private List<DraftLine> draftLines = new();
+
+    private string selectedCustomerId = "0";
+    private string selectedProductId = "0";
+    private string quantityText = "1";
+    private string message = string.Empty;
+
+    private decimal subtotal;
+    private decimal tax;
+    private decimal total;
+
+    protected override void OnInitialized()
+    {
+        customers = OrderData.ActiveCustomers();
+        products = CatalogData.ActiveForOrder();
+        RecalcTotals();
+    }
+
+    private void OnCustomerChanged(ChangeEventArgs e)
+    {
+        selectedCustomerId = e.Value?.ToString() ?? "0";
+    }
+
+    private void OnProductChanged(ChangeEventArgs e)
+    {
+        selectedProductId = e.Value?.ToString() ?? "0";
+    }
+
+    private void BtnAddClick()
+    {
+        if (!int.TryParse(selectedProductId, out int productId) || productId <= 0)
+        {
+            message = Messages.NeedProduct;
+            return;
+        }
+
+        if (!int.TryParse(quantityText?.Trim(), out int quantity) || quantity < 1)
+        {
+            message = Messages.QtyRequired;
+            return;
+        }
+
+        System.Data.DataRow product = CatalogData.Find(productId);
+        if (product == null)
+        {
+            message = Messages.NotFound;
+            return;
+        }
+
+        if (!Convert.ToBoolean(product["IsActive"]))
+        {
+            message = Messages.ProductInactive;
+            return;
+        }
+
+        DraftLine? existing = draftLines.FirstOrDefault(l => l.ProductId == productId);
+
+        if (existing == null)
+        {
+            var line = new DraftLine
+            {
+                ProductId = productId,
+                Sku = Convert.ToString(product["Sku"]) ?? "",
+                ProductName = Convert.ToString(product["ProductName"]) ?? "",
+                Quantity = quantity,
+                UnitPrice = Convert.ToDecimal(product["UnitPrice"]),
+                LineTotal = Money.LineTotal(quantity, Convert.ToDecimal(product["UnitPrice"]))
+            };
+            draftLines.Add(line);
+            message = string.Format(Messages.LineAdded, product["Sku"]);
+        }
+        else
+        {
+            int nextQty = existing.Quantity + quantity;
+            existing.Quantity = nextQty;
+            existing.LineTotal = Money.LineTotal(nextQty, existing.UnitPrice);
+            message = string.Format(Messages.LineMerged, quantity, existing.Sku, nextQty);
+        }
+
+        RecalcTotals();
+    }
+
+    private void RemoveLine(int index)
+    {
+        if (index < 0 || index >= draftLines.Count) return;
+        draftLines.RemoveAt(index);
+        message = "";
+        RecalcTotals();
+    }
+
+    private async Task BtnSaveClick()
+    {
+        if (!int.TryParse(selectedCustomerId, out int customerId) || customerId <= 0)
+        {
+            message = Messages.NeedCustomer;
+            return;
+        }
+
+        int userId = await GetCurrentUserIdAsync();
+
+        System.Data.DataTable draft = BuildDraftDataTable();
+        ActionResult result = OrderData.CreateOpen(customerId, userId, draft);
+        if (!result.Ok)
+        {
+            message = result.Message;
+            return;
+        }
+
+        draftLines.Clear();
+        Navigation.NavigateTo("/Orders/Detail?id=" + result.Id.ToString(), forceLoad: false);
+    }
+
+    private void BtnClearClick()
+    {
+        draftLines.Clear();
+        message = "";
+        RecalcTotals();
+    }
+
+    private void RecalcTotals()
+    {
+        decimal sub = 0m;
+        foreach (var line in draftLines)
+        {
+            sub += line.LineTotal;
+        }
+        subtotal = Money.Round(sub);
+        tax = Money.Tax(subtotal);
+        total = Money.Round(subtotal + tax);
+    }
+
+    private System.Data.DataTable BuildDraftDataTable()
+    {
+        var table = new System.Data.DataTable();
+        table.Columns.Add("ProductId", typeof(int));
+        table.Columns.Add("Sku", typeof(string));
+        table.Columns.Add("ProductName", typeof(string));
+        table.Columns.Add("Quantity", typeof(int));
+        table.Columns.Add("UnitPrice", typeof(decimal));
+        table.Columns.Add("LineTotal", typeof(decimal));
+
+        foreach (var line in draftLines)
+        {
+            System.Data.DataRow row = table.NewRow();
+            row["ProductId"] = line.ProductId;
+            row["Sku"] = line.Sku;
+            row["ProductName"] = line.ProductName;
+            row["Quantity"] = line.Quantity;
+            row["UnitPrice"] = line.UnitPrice;
+            row["LineTotal"] = line.LineTotal;
+            table.Rows.Add(row);
+        }
+
+        return table;
+    }
+
+    private async Task<int> GetCurrentUserIdAsync()
+    {
+        if (AuthState == null) return 0;
+        var authState = await AuthState;
+        var user = authState.User;
+        if (user.Identity == null || !user.Identity.IsAuthenticated) return 0;
+        var idClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+        if (idClaim != null && int.TryParse(idClaim.Value, out int id))
+        {
+            return id;
+        }
+        return 0;
+    }
+
+    private sealed class DraftLine
+    {
+        public int ProductId { get; set; }
+        public string Sku { get; set; } = "";
+        public string ProductName { get; set; } = "";
+        public int Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal LineTotal { get; set; }
+    }
+}

@@ -1,0 +1,204 @@
+@page "/Orders/Detail"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@using System.Data
+@using System.Security.Claims
+
+<div class="card">
+    <h2><span id="lblNumber">@lblNumber</span></h2>
+    <span id="lblMessage" class="msg">@lblMessage</span>
+    <p class="note">Picking deducts stock. If any line is short, nothing is deducted and the order stays Open. Invoicing does not change stock. Cancelling a picked order puts the stock back. Cancelling an open order does not. Invoiced and Cancelled do not move again.</p>
+    <div class="row">Customer <span id="lblCustomer">@lblCustomer</span></div>
+    <div class="row">Status <span id="lblStatus">@lblStatus</span></div>
+    <div class="row">Opened <span id="lblCreated">@lblCreated</span></div>
+    <div class="row">Picked <span id="lblPicked">@lblPicked</span></div>
+    <div class="row">Invoiced <span id="lblInvoiced">@lblInvoiced</span></div>
+
+    @if (lines != null && lines.Rows.Count > 0)
+    {
+        <table class="grid">
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Name</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Line</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < lines.Rows.Count; i++)
+                {
+                    var row = lines.Rows[i];
+                    <tr class="@(i % 2 == 1 ? "alt" : "")">
+                        <td>@Convert.ToString(row["Sku"])</td>
+                        <td>@Convert.ToString(row["ProductName"])</td>
+                        <td>@Convert.ToInt32(row["Quantity"])</td>
+                        <td>@Convert.ToDecimal(row["UnitPrice"]).ToString("N2")</td>
+                        <td>@Convert.ToDecimal(row["LineTotal"]).ToString("N2")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <p>No lines.</p>
+    }
+
+    <div class="totals">
+        <div>Subtotal <span id="lblSubtotal">@lblSubtotal</span></div>
+        <div>Tax <span id="lblTax">@lblTax</span></div>
+        <div>Total <span id="lblTotal">@lblTotal</span></div>
+    </div>
+
+    @if (pnlApplyVisible)
+    {
+        <div id="pnlApply">
+            <div class="row">
+                <label>Move to</label>
+                <select id="ddlNext" value="@ddlNextValue" @onchange="OnDdlNextChanged">
+                    @foreach (var choice in nextChoices)
+                    {
+                        <option value="@choice">@choice</option>
+                    }
+                </select>
+                <button id="btnApply" @onclick="BtnApplyClick" disabled="@(!btnApplyEnabled)">Apply status</button>
+            </div>
+        </div>
+    }
+</div>
+
+<div class="card">
+    <h2>Stock ledger for this order</h2>
+    @if (ledger != null && ledger.Rows.Count > 0)
+    {
+        <table class="grid">
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Change</th>
+                    <th>Reason</th>
+                    <th>Note</th>
+                    <th>When</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < ledger.Rows.Count; i++)
+                {
+                    var row = ledger.Rows[i];
+                    <tr class="@(i % 2 == 1 ? "alt" : "")">
+                        <td>@Convert.ToString(row["Sku"])</td>
+                        <td>@Convert.ToInt32(row["QtyChange"])</td>
+                        <td>@Convert.ToString(row["Reason"])</td>
+                        <td>@Convert.ToString(row["Note"])</td>
+                        <td>@Convert.ToDateTime(row["CreatedAt"]).ToString("dd MMM yyyy HH:mm")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <p>No stock has moved for this order.</p>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "id")]
+    private string? IdParam { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = default!;
+
+    private string lblNumber = "Order";
+    private string lblMessage = string.Empty;
+    private string lblCustomer = string.Empty;
+    private string lblStatus = string.Empty;
+    private string lblCreated = string.Empty;
+    private string lblPicked = string.Empty;
+    private string lblInvoiced = string.Empty;
+    private string lblSubtotal = string.Empty;
+    private string lblTax = string.Empty;
+    private string lblTotal = string.Empty;
+
+    private DataTable? lines;
+    private DataTable? ledger;
+
+    private bool pnlApplyVisible;
+    private bool btnApplyEnabled;
+    private string ddlNextValue = string.Empty;
+    private string[] nextChoices = Array.Empty<string>();
+
+    private int currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState != null)
+        {
+            var authState = await AuthState;
+            var userIdClaim = authState.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int uid))
+            {
+                currentUserId = uid;
+            }
+        }
+
+        BindOrder();
+    }
+
+    private int QueryId()
+    {
+        if (!int.TryParse(IdParam, out int id)) return 0;
+        if (id < 0) return 0;
+        return id;
+    }
+
+    private void BtnApplyClick()
+    {
+        ActionResult result = OrderData.Transition(QueryId(), ddlNextValue, currentUserId);
+        lblMessage = result.Message;
+        BindOrder();
+    }
+
+    private void OnDdlNextChanged(ChangeEventArgs e)
+    {
+        ddlNextValue = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private void BindOrder()
+    {
+        int id = QueryId();
+        DataRow? header = id == 0 ? null : OrderData.Header(id);
+        if (header == null)
+        {
+            lblNumber = "Order";
+            lblMessage = Messages.NotFound;
+            pnlApplyVisible = false;
+            return;
+        }
+
+        lblNumber = Convert.ToString(header["OrderNumber"]) ?? string.Empty;
+        lblCustomer = Convert.ToString(header["AccountCode"]) + " " + Convert.ToString(header["CompanyName"]);
+        lblStatus = Convert.ToString(header["Status"]) ?? string.Empty;
+        lblCreated = Convert.ToDateTime(header["CreatedAt"]).ToString("dd MMM yyyy HH:mm");
+        lblPicked = header["PickedAt"] == DBNull.Value ? "-" : Convert.ToDateTime(header["PickedAt"]).ToString("dd MMM yyyy HH:mm");
+        lblInvoiced = header["InvoicedAt"] == DBNull.Value ? "-" : Convert.ToDateTime(header["InvoicedAt"]).ToString("dd MMM yyyy HH:mm");
+        lblSubtotal = Convert.ToDecimal(header["Subtotal"]).ToString("N2");
+        lblTax = Convert.ToDecimal(header["Tax"]).ToString("N2");
+        lblTotal = Convert.ToDecimal(header["Total"]).ToString("N2");
+
+        lines = OrderData.Lines(id);
+        ledger = OrderData.Ledger(id);
+
+        string status = Convert.ToString(header["Status"]) ?? string.Empty;
+        nextChoices = OrderData.NextStatuses(status);
+        ddlNextValue = status;
+        btnApplyEnabled = nextChoices.Length > 1;
+        pnlApplyVisible = true;
+    }
+}
