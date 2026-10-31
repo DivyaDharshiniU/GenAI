@@ -1,0 +1,33 @@
+<%@ Master Language="C#" AutoEventWireup="true" CodeBehind="Site.Master.cs" Inherits="ApexCounter.SiteMaster" %>
+<!DOCTYPE html>
+<html>
+<head runat="server">
+    <title>Apex Counter</title>
+    <link rel="stylesheet" runat="server" href="~/Content/site.css" />
+</head>
+<body>
+    <form id="form1" runat="server">
+        <div class="top">
+            <p class="stamp">Legacy · .NET Framework 4.0</p>
+            <h1>Apex Counter</h1>
+            <p class="who">Signed in as <asp:Label ID="lblUser" runat="server" /></p>
+        </div>
+        <div class="nav">
+            <asp:HyperLink ID="lnkDesk" runat="server" NavigateUrl="~/Default.aspx" Text="Desk" />
+            <asp:HyperLink ID="lnkCustomers" runat="server" NavigateUrl="~/Customers/List.aspx" Text="Customers" />
+            <asp:HyperLink ID="lnkCatalog" runat="server" NavigateUrl="~/Catalog/List.aspx" Text="Catalog" />
+            <asp:HyperLink ID="lnkOrders" runat="server" NavigateUrl="~/Orders/List.aspx" Text="Orders" />
+            <asp:HyperLink ID="lnkNew" runat="server" NavigateUrl="~/Orders/New.aspx" Text="New order" />
+            <asp:HyperLink ID="lnkLow" runat="server" NavigateUrl="~/Reports/LowStock.aspx" Text="Low stock" />
+            <asp:HyperLink ID="lnkPassword" runat="server" NavigateUrl="~/Account/Password.aspx" Text="Password" />
+            <asp:LinkButton ID="btnSignOut" runat="server" CssClass="out" OnClick="btnSignOut_Click" Text="Sign out" />
+        </div>
+        <div class="page">
+            <asp:Panel ID="pnlDb" runat="server" Visible="false" CssClass="banner">
+                <asp:Label ID="lblDb" runat="server" />
+            </asp:Panel>
+            <asp:ContentPlaceHolder ID="MainContent" runat="server" />
+        </div>
+    </form>
+</body>
+</html>

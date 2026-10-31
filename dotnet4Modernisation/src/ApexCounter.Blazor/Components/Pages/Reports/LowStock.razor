@@ -1,0 +1,110 @@
+@page "/Reports/LowStock"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+<PageTitle>Low stock</PageTitle>
+
+<div class="card">
+    <h2>Low stock</h2>
+    <p class="note">Active products only, where on hand is at or under the reorder point. Inactive products stay off this report even when they are low. The catalog filter is the list that includes them.</p>
+    <p><span>@itemCount</span> active products</p>
+
+    @if (pagedItems is not null && pagedItems.Count > 0)
+    {
+        <table class="grid">
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Name</th>
+                    <th>Price</th>
+                    <th>On hand</th>
+                    <th>Reorder</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < pagedItems.Count; i++)
+                {
+                    var row = pagedItems[i];
+                    <tr class="@(i % 2 == 1 ? "alt low" : "low")">
+                        <td>@row["Sku"]</td>
+                        <td>@row["ProductName"]</td>
+                        <td>@(Convert.ToDecimal(row["UnitPrice"]).ToString("N2"))</td>
+                        <td>@row["OnHand"]</td>
+                        <td>@row["ReorderPoint"]</td>
+                        <td><a href="@($"Catalog/Edit?id={row["ProductId"]}")">Open</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (totalPages > 1)
+        {
+            <div class="pager">
+                @for (int p = 0; p < totalPages; p++)
+                {
+                    int pageIndex = p;
+                    if (pageIndex == currentPage)
+                    {
+                        <span>@(pageIndex + 1)</span>
+                    }
+                    else
+                    {
+                        <a href="#" @onclick="() => GoToPage(pageIndex)" @onclick:preventDefault>@(pageIndex + 1)</a>
+                    }
+                    @(" ")
+                }
+            </div>
+        }
+    }
+    else if (pagedItems is not null)
+    {
+        <p>Nothing is low.</p>
+    }
+</div>
+
+@code {
+    private const int PageSize = 4;
+
+    private System.Data.DataTable? allRows;
+    private List<System.Data.DataRow>? pagedItems;
+    private int itemCount;
+    private int currentPage;
+    private int totalPages;
+
+    protected override void OnInitialized()
+    {
+        BindGrid();
+    }
+
+    private void BindGrid()
+    {
+        allRows = CatalogData.LowStockReport();
+        itemCount = allRows.Rows.Count;
+        totalPages = (int)Math.Ceiling((double)itemCount / PageSize);
+        if (currentPage >= totalPages && totalPages > 0)
+        {
+            currentPage = totalPages - 1;
+        }
+        ApplyPaging();
+    }
+
+    private void ApplyPaging()
+    {
+        if (allRows is null)
+        {
+            pagedItems = new();
+            return;
+        }
+        pagedItems = allRows.Rows.Cast<System.Data.DataRow>()
+            .Skip(currentPage * PageSize)
+            .Take(PageSize)
+            .ToList();
+    }
+
+    private void GoToPage(int pageIndex)
+    {
+        currentPage = pageIndex;
+        ApplyPaging();
+    }
+}

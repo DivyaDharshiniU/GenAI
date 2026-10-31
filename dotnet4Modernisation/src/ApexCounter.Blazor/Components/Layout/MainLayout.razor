@@ -1,0 +1,58 @@
+@inherits LayoutComponentBase
+
+<div class="top">
+    <p class="stamp">Apex Counter · .NET 8</p>
+    <h1>Apex Counter</h1>
+    <AuthorizeView>
+        <Authorized>
+            <p class="who">Signed in as @context.User.Identity?.Name</p>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+<nav class="nav">
+    <NavLink href="" Match="NavLinkMatch.All">Desk</NavLink>
+    <NavLink href="Customers/List">Customers</NavLink>
+    <NavLink href="Catalog/List">Catalog</NavLink>
+    <NavLink href="Orders/List">Orders</NavLink>
+    <NavLink href="Orders/New">New order</NavLink>
+    <NavLink href="Reports/LowStock">Low stock</NavLink>
+    <NavLink href="Account/Password">Password</NavLink>
+    <AuthorizeView>
+        <Authorized>
+            <a href="Logout" class="out">Sign out</a>
+        </Authorized>
+    </AuthorizeView>
+</nav>
+
+<div class="page">
+    @if (_showDbBanner)
+    {
+        <div class="banner">@_dbMessage</div>
+    }
+    @Body
+</div>
+
+@code {
+    private bool _showDbBanner;
+    private string _dbMessage = string.Empty;
+
+    [Inject]
+    private IConfiguration Configuration { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Validate that the database is reachable.
+            var connectionString = Configuration.GetConnectionString("ApexCounter");
+            using var connection = new Microsoft.Data.SqlClient.SqlConnection(connectionString);
+            await connection.OpenAsync();
+        }
+        catch (Microsoft.Data.SqlClient.SqlException)
+        {
+            _showDbBanner = true;
+            _dbMessage = Messages.DbDown;
+        }
+    }
+}

@@ -1,0 +1,129 @@
+@page "/Catalog/List"
+@using System.Data
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+<PageTitle>Catalog</PageTitle>
+
+<div class="card">
+    <h2>Catalog</h2>
+    <p class="note">A row is marked when on hand is at or under the reorder point. This list includes inactive products. The low-stock report does not.</p>
+    <div class="row">
+        <input type="text" @bind="searchTerm" />
+        <label>
+            <input type="checkbox" @bind="lowOnly" /> Low stock only
+        </label>
+        <button @onclick="Search">Search</button>
+        <a href="Catalog/Edit">New product</a>
+    </div>
+
+    @if (pagedProducts.Count == 0)
+    {
+        <p>No products.</p>
+    }
+    else
+    {
+        <table class="grid">
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Name</th>
+                    <th>Price</th>
+                    <th>On hand</th>
+                    <th>Reorder</th>
+                    <th>Active</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < pagedProducts.Count; i++)
+                {
+                    var product = pagedProducts[i];
+                    int onHand = Convert.ToInt32(product["OnHand"]);
+                    int reorder = Convert.ToInt32(product["ReorderPoint"]);
+                    string rowClass = (i % 2 == 1) ? "alt" : "";
+                    if (onHand <= reorder)
+                    {
+                        rowClass = "low";
+                    }
+                    <tr class="@rowClass">
+                        <td>@product["Sku"]</td>
+                        <td>@product["ProductName"]</td>
+                        <td>@(Convert.ToDecimal(product["UnitPrice"]).ToString("N2"))</td>
+                        <td>@product["OnHand"]</td>
+                        <td>@product["ReorderPoint"]</td>
+                        <td>@product["ActiveText"]</td>
+                        <td><a href="@($"Catalog/Edit?id={product["ProductId"]}")">Open</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (totalPages > 1)
+        {
+            <div class="pager">
+                @for (int p = 0; p < totalPages; p++)
+                {
+                    int pageIndex = p;
+                    if (pageIndex == currentPage)
+                    {
+                        <span>@(pageIndex + 1)</span>
+                    }
+                    else
+                    {
+                        <a href="#" @onclick="() => GoToPage(pageIndex)" @onclick:preventDefault>@(pageIndex + 1)</a>
+                    }
+                    @(" ")
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private string searchTerm = string.Empty;
+    private bool lowOnly;
+
+    private List<System.Data.DataRow> allProducts = new();
+    private List<System.Data.DataRow> pagedProducts = new();
+    private int currentPage;
+    private int totalPages;
+    private const int PageSize = 5;
+
+    protected override void OnInitialized()
+    {
+        BindGrid();
+    }
+
+    private void Search()
+    {
+        currentPage = 0;
+        BindGrid();
+    }
+
+    private void GoToPage(int pageIndex)
+    {
+        currentPage = pageIndex;
+        ApplyPaging();
+    }
+
+    private void BindGrid()
+    {
+        System.Data.DataTable table = CatalogData.List(searchTerm, lowOnly);
+        allProducts = table.AsEnumerable().ToList();
+        ApplyPaging();
+    }
+
+    private void ApplyPaging()
+    {
+        totalPages = (int)Math.Ceiling((double)allProducts.Count / PageSize);
+        if (currentPage >= totalPages && totalPages > 0)
+        {
+            currentPage = totalPages - 1;
+        }
+        pagedProducts = allProducts
+            .Skip(currentPage * PageSize)
+            .Take(PageSize)
+            .ToList();
+    }
+}

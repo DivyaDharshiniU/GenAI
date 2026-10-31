@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <!-- PORT-TODO: Properties/AssemblyInfo.cs was not moved into this project
+       (Directory.Build.props may set assembly attributes too). It is removed during the
+       port, so add these attributes back by hand if they are needed:
+         [assembly: AssemblyTitle("ApexCounter")]
+         [assembly: AssemblyDescription("Apex Industrial Supply counter desk, .NET Framework 4.0")]
+         [assembly: AssemblyVersion("4.0.0.0")]
+         [assembly: AssemblyFileVersion("4.0.0.0")]
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.1" />
+  </ItemGroup>
+</Project>

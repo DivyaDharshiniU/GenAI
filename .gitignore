@@ -125,3 +125,31 @@ config.yaml
 
 # Source packaging artifacts
 dotnet4Modernisation/src.zip
+
+# ─── .NET / Visual Studio (dotnet4Modernisation) ─────────────────────────────
+# Build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.dll
+*.pdb
+*.exe
+*.cache
+# Visual Studio / IDE machine-local state
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.VC.db
+# AWS Transform internal workspace & checkpoints (regenerated, not source)
+artifactWorkspace/
+# .NET secrets / publish profiles (guard against future additions)
+*.pfx
+*.snk
+*.publishsettings
+*.pubxml
+*.pubxml.user
+appsettings.*.local.json
+secrets.json

@@ -1,0 +1,151 @@
+@page "/Customers/List"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+<PageTitle>Customers</PageTitle>
+
+<div class="card">
+    <h2>Customers</h2>
+    <p class="note">Opens on active accounts. Retired Yard Co. is inactive and stays off this list until you choose All or Inactive.</p>
+    <div class="row">
+        <input type="text" @bind="searchTerm" />
+        <select value="@activeFilter" @onchange="OnActiveFilterChanged">
+            <option value="all">All</option>
+            <option value="yes" selected>Active</option>
+            <option value="no">Inactive</option>
+        </select>
+        <button @onclick="Search">Search</button>
+        <a href="Customers/Edit">New customer</a>
+    </div>
+
+    @if (pagedItems.Count == 0)
+    {
+        <p>No customers.</p>
+    }
+    else
+    {
+        <table class="grid">
+            <thead>
+                <tr>
+                    <th>Account</th>
+                    <th>Company</th>
+                    <th>Contact</th>
+                    <th>Phone</th>
+                    <th>City</th>
+                    <th>Active</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < pagedItems.Count; i++)
+                {
+                    var item = pagedItems[i];
+                    <tr class="@(i % 2 == 1 ? "alt" : "")">
+                        <td>@item.AccountCode</td>
+                        <td>@item.CompanyName</td>
+                        <td>@item.ContactName</td>
+                        <td>@item.Phone</td>
+                        <td>@item.City</td>
+                        <td>@item.ActiveText</td>
+                        <td><a href="@($"Customers/Edit?id={item.CustomerId}")">Open</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (totalPages > 1)
+        {
+            <div class="pager">
+                @for (int p = 0; p < totalPages; p++)
+                {
+                    int pageIndex = p;
+                    if (pageIndex == currentPageIndex)
+                    {
+                        <span><strong>@(pageIndex + 1)</strong></span>
+                    }
+                    else
+                    {
+                        <a href="#" @onclick="() => GoToPage(pageIndex)" @onclick:preventDefault>@(pageIndex + 1)</a>
+                    }
+                    @(" ")
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private string searchTerm = string.Empty;
+    private string activeFilter = "yes";
+
+    private List<CustomerListItem> allItems = new();
+    private List<CustomerListItem> pagedItems = new();
+
+    private int currentPageIndex;
+    private int pageSize = 5;
+    private int totalPages;
+
+    protected override void OnInitialized()
+    {
+        BindGrid();
+    }
+
+    private void Search()
+    {
+        currentPageIndex = 0;
+        BindGrid();
+    }
+
+    private void OnActiveFilterChanged(ChangeEventArgs e)
+    {
+        activeFilter = e.Value?.ToString() ?? "yes";
+    }
+
+    private void GoToPage(int pageIndex)
+    {
+        currentPageIndex = pageIndex;
+        ApplyPaging();
+    }
+
+    private void BindGrid()
+    {
+        var table = CustomerData.List(searchTerm, activeFilter);
+        allItems = new List<CustomerListItem>();
+        foreach (System.Data.DataRow row in table.Rows)
+        {
+            allItems.Add(new CustomerListItem
+            {
+                CustomerId = Convert.ToInt32(row["CustomerId"]),
+                AccountCode = row["AccountCode"]?.ToString() ?? string.Empty,
+                CompanyName = row["CompanyName"]?.ToString() ?? string.Empty,
+                ContactName = row["ContactName"]?.ToString() ?? string.Empty,
+                Phone = row["Phone"]?.ToString() ?? string.Empty,
+                City = row["City"]?.ToString() ?? string.Empty,
+                ActiveText = row["ActiveText"]?.ToString() ?? string.Empty
+            });
+        }
+        ApplyPaging();
+    }
+
+    private void ApplyPaging()
+    {
+        totalPages = (int)Math.Ceiling((double)allItems.Count / pageSize);
+        if (currentPageIndex >= totalPages && totalPages > 0)
+            currentPageIndex = totalPages - 1;
+        pagedItems = allItems
+            .Skip(currentPageIndex * pageSize)
+            .Take(pageSize)
+            .ToList();
+    }
+
+    private sealed class CustomerListItem
+    {
+        public int CustomerId { get; set; }
+        public string AccountCode { get; set; } = string.Empty;
+        public string CompanyName { get; set; } = string.Empty;
+        public string ContactName { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string City { get; set; } = string.Empty;
+        public string ActiveText { get; set; } = string.Empty;
+    }
+}

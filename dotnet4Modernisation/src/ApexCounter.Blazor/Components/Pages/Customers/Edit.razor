@@ -1,0 +1,130 @@
+@page "/Customers/Edit"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+<PageTitle>Customer</PageTitle>
+
+<div class="card">
+    <h2>Customer</h2>
+    @if (!string.IsNullOrEmpty(lblMessage))
+    {
+        <span class="msg">@lblMessage</span>
+    }
+    <EditForm Model="model" FormName="customerEdit" OnValidSubmit="BtnSave_Click">
+        <DataAnnotationsValidator />
+        <div class="row">
+            <label for="txtAccount">Account code</label>
+            <input id="txtAccount" type="text" maxlength="20" @bind="model.AccountCode" />
+            <ValidationMessage For="@(() => model.AccountCode)" />
+        </div>
+        <div class="row">
+            <label for="txtCompany">Company</label>
+            <input id="txtCompany" type="text" maxlength="120" @bind="model.CompanyName" />
+            <ValidationMessage For="@(() => model.CompanyName)" />
+        </div>
+        <div class="row">
+            <label for="txtContact">Contact</label>
+            <input id="txtContact" type="text" maxlength="80" @bind="model.ContactName" />
+            <ValidationMessage For="@(() => model.ContactName)" />
+        </div>
+        <div class="row">
+            <label for="txtPhone">Phone</label>
+            <input id="txtPhone" type="text" maxlength="30" @bind="model.Phone" />
+            <ValidationMessage For="@(() => model.Phone)" />
+        </div>
+        <div class="row">
+            <label for="txtCity">City</label>
+            <input id="txtCity" type="text" maxlength="60" @bind="model.City" />
+            <ValidationMessage For="@(() => model.City)" />
+        </div>
+        <div class="row">
+            <label for="chkActive">Active</label>
+            <input id="chkActive" type="checkbox" @bind="model.IsActive" />
+        </div>
+        <button type="submit">Save</button>
+        <button type="button" class="btn quiet" @onclick="BtnCancel_Click">Back</button>
+    </EditForm>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "id")]
+    private int? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "saved")]
+    private string? Saved { get; set; }
+
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private CustomerEditModel model = new();
+    private string lblMessage = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        int id = Id.GetValueOrDefault();
+        if (id == 0) return;
+
+        System.Data.DataRow? row = CustomerData.Find(id);
+        if (row == null)
+        {
+            lblMessage = Messages.NotFound;
+            return;
+        }
+
+        model.AccountCode = Convert.ToString(row["AccountCode"]) ?? string.Empty;
+        model.CompanyName = Convert.ToString(row["CompanyName"]) ?? string.Empty;
+        model.ContactName = Convert.ToString(row["ContactName"]) ?? string.Empty;
+        model.Phone = Convert.ToString(row["Phone"]) ?? string.Empty;
+        model.City = Convert.ToString(row["City"]) ?? string.Empty;
+        model.IsActive = Convert.ToBoolean(row["IsActive"]);
+
+        if (Saved == "1")
+        {
+            lblMessage = string.Format(Messages.CustomerSaved, model.AccountCode);
+        }
+    }
+
+    private void BtnSave_Click()
+    {
+        int id = Id.GetValueOrDefault();
+        ActionResult result = CustomerData.Save(
+            id, model.AccountCode, model.CompanyName, model.ContactName, model.Phone, model.City, model.IsActive);
+
+        if (!result.Ok || id > 0)
+        {
+            lblMessage = result.Message;
+            return;
+        }
+
+        Navigation.NavigateTo($"/Customers/Edit?id={result.Id}&saved=1");
+    }
+
+    private void BtnCancel_Click()
+    {
+        Navigation.NavigateTo("/Customers/List");
+    }
+
+    private sealed class CustomerEditModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Enter an account code.")]
+        [System.ComponentModel.DataAnnotations.MaxLength(20)]
+        public string AccountCode { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Enter a company name.")]
+        [System.ComponentModel.DataAnnotations.MaxLength(120)]
+        public string CompanyName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Enter a contact name.")]
+        [System.ComponentModel.DataAnnotations.MaxLength(80)]
+        public string ContactName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Enter a phone number.")]
+        [System.ComponentModel.DataAnnotations.MaxLength(30)]
+        public string Phone { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Enter a city.")]
+        [System.ComponentModel.DataAnnotations.MaxLength(60)]
+        public string City { get; set; } = string.Empty;
+
+        public bool IsActive { get; set; } = true;
+    }
+}
