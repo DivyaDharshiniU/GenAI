@@ -153,3 +153,16 @@ artifactWorkspace/
 *.pubxml.user
 appsettings.*.local.json
 secrets.json
+
+# ─── Node / Playwright (dotnet4Modernisation/e2e) ────────────────────────────
+node_modules/
+e2e/node_modules/
+test-results/
+playwright-report/
+playwright/.cache/
+last-run.json
+
+# ─── Media / recordings (do not commit large binaries) ───────────────────────
+*.mp4
+*.mov
+*.avi

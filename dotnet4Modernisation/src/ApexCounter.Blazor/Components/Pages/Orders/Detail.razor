@@ -141,7 +141,9 @@
         if (AuthState != null)
         {
             var authState = await AuthState;
-            var userIdClaim = authState.User.FindFirst(ClaimTypes.NameIdentifier);
+            // The user id is stored as a custom "UserId" claim at sign-in
+            // (see AuthData.SignInWithClaimsAsync), not ClaimTypes.NameIdentifier.
+            var userIdClaim = authState.User.FindFirst("UserId");
             if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int uid))
             {
                 currentUserId = uid;

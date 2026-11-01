@@ -59,11 +59,11 @@
         <p class="note">Use a negative number to remove stock. Zero is refused. The reason is written on the ledger.</p>
         <div class="row">
             <label>Quantity change</label>
-            <input id="txtAdjustQty" type="text" @bind="adjustQty" />
+            <input id="txtAdjustQty" type="text" @bind="adjustQty" @bind:event="oninput" />
         </div>
         <div class="row">
             <label>Reason</label>
-            <input id="txtAdjustNote" type="text" maxlength="200" @bind="adjustNote" />
+            <input id="txtAdjustNote" type="text" maxlength="200" @bind="adjustNote" @bind:event="oninput" />
         </div>
         <button type="button" @onclick="BtnAdjust_Click">Adjust</button>
     </div>
@@ -171,7 +171,9 @@
         if (AuthState == null) return 0;
         var authState = await AuthState;
         var user = authState.User;
-        var userIdClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+        // The user id is stored as a custom "UserId" claim at sign-in
+        // (see AuthData.SignInWithClaimsAsync), not ClaimTypes.NameIdentifier.
+        var userIdClaim = user.FindFirst("UserId");
         if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
         {
             return userId;

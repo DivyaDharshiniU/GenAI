@@ -1,12 +1,12 @@
 @page "/Login"
-@using System.ComponentModel.DataAnnotations
-@using System.Security.Claims
-@using Microsoft.AspNetCore.Authentication
-@using Microsoft.AspNetCore.Authentication.Cookies
-@using Microsoft.Data.SqlClient
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+@layout EmptyLayout
 
-<!-- PORT-TODO -->
-<!-- {"note": "Login.aspx had its own full HTML (no MasterPageFile). If the default layout adds site navigation chrome, consider adding a separate minimal layout for the login page and setting @@layout here."} -->
+@* Static SSR page. The form posts to the /auth/login endpoint (see Program.cs)
+   on a real HTTP request, so HttpContext.SignInAsync can write the auth cookie.
+   Sign-in must NOT run inside a Blazor render (interactive or static), where the
+   Set-Cookie header is not reliably flushed — that made login silently fail. *@
 
 <PageTitle>Sign in · Apex Counter</PageTitle>
 
@@ -15,22 +15,32 @@
         <p class="stamp">Blazor · .NET 8</p>
         <h1>Apex Counter</h1>
         <p>Parts desk for Apex Industrial Supply. Stock changes only when an order is picked.</p>
-        <EditForm Model="loginModel" FormName="loginForm" OnValidSubmit="HandleLogin">
-            <DataAnnotationsValidator />
+        @* data-enhance="false": force a full browser POST, not Blazor enhanced
+           navigation. Enhanced nav races with the auth redirect and can leave the
+           browser on /Login intermittently. *@
+        <form method="post" action="/auth/login" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
             <div class="row">
                 <label for="txtUser">Username</label>
-                <InputText id="txtUser" @bind-Value="loginModel.UserName" />
-                <ValidationMessage For="@(() => loginModel.UserName)" />
+                <input id="txtUser" name="userName" type="text" />
+                @if (showUserRequired)
+                {
+                    <span class="err">Enter a username.</span>
+                }
             </div>
             <div class="row">
                 <label for="txtPassword">Password</label>
-                <InputText id="txtPassword" type="password" @bind-Value="loginModel.Password" />
-                <ValidationMessage For="@(() => loginModel.Password)" />
+                <input id="txtPassword" name="password" type="password" />
+                @if (showPasswordRequired)
+                {
+                    <span class="err">Enter a password.</span>
+                }
             </div>
             <button type="submit">Sign in</button>
             <p class="err">@errorMessage</p>
             <p class="note">Classroom sign-in: clerk or supervisor. Password counter2011.</p>
-        </EditForm>
+        </form>
     </div>
 </div>
 
@@ -38,78 +48,29 @@
     [SupplyParameterFromQuery]
     private string? ReturnUrl { get; set; }
 
-    [CascadingParameter]
-    private HttpContext? HttpContext { get; set; }
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? Error { get; set; }
 
-    [SupplyParameterFromForm]
-    private LoginModel loginModel { get; set; } = new();
-
-    [Inject]
-    private NavigationManager Navigation { get; set; } = default!;
-
-    [Inject]
-    private AuthData AuthData { get; set; } = default!;
+    [SupplyParameterFromQuery(Name = "f")]
+    private string? Field { get; set; }
 
     private string errorMessage = string.Empty;
+    private bool showUserRequired;
+    private bool showPasswordRequired;
 
-    private async Task HandleLogin()
+    protected override void OnParametersSet()
     {
-        if (HttpContext is null)
-            return;
-
-        string? error;
-        try
+        errorMessage = Error switch
         {
-            if (!AuthData.TryLogin(loginModel.UserName!, loginModel.Password!, out error))
-            {
-                errorMessage = error ?? Messages.LoginFailed;
-                return;
-            }
-        }
-        catch (SqlException)
-        {
-            errorMessage = Messages.DbDown;
-            return;
-        }
-
-        // Build claims from the authenticated user — AuthData.TryLogin validated credentials
-        // against the database. In the legacy app, Remember() put UserId and DisplayName
-        // into Session; here we store them as claims in the auth cookie.
-        var userName = loginModel.UserName!.Trim();
-
-        var table = Db.Query(
-            "SELECT UserId, DisplayName FROM dbo.AppUser WHERE UserName = @name AND IsActive = 1",
-            new SqlParameter("@name", userName));
-
-        var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.Name, userName)
+            "bad" => Messages.LoginFailed,
+            "db" => Messages.DbDown,
+            _ => string.Empty
         };
 
-        if (table.Rows.Count == 1)
+        if (Error == "required")
         {
-            var row = table.Rows[0];
-            claims.Add(new Claim("UserId", Convert.ToString(row["UserId"])!));
-            claims.Add(new Claim("DisplayName", Convert.ToString(row["DisplayName"])!));
+            showUserRequired = Field is "user" or "both";
+            showPasswordRequired = Field is "pass" or "both";
         }
-
-        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-        var principal = new ClaimsPrincipal(identity);
-
-        await HttpContext.SignInAsync(
-            CookieAuthenticationDefaults.AuthenticationScheme,
-            principal);
-
-        var redirect = string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl;
-        Navigation.NavigateTo(redirect, forceLoad: true);
-    }
-
-    private sealed class LoginModel
-    {
-        [Required(ErrorMessage = "Enter a username.")]
-        public string? UserName { get; set; }
-
-        [Required(ErrorMessage = "Enter a password.")]
-        public string? Password { get; set; }
     }
 }

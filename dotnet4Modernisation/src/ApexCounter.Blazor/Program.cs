@@ -73,7 +73,8 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// No HttpsRedirection: the contract requires the app to serve plain HTTP on
+// http://localhost:5088/ (port 5080 stays with the Web Forms app).
 app.UseStaticFiles();
 
 // Localization must run before routing so culture is set for all requests.
@@ -93,6 +94,51 @@ app.MapGet("/Logout", async (HttpContext http) =>
 {
     await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.Redirect("/Login");
+});
+
+// ---------------------------------------------------------------------------
+// Login endpoint — sign-in must happen on a real HTTP request so the auth
+// cookie is written to the response. Doing SignInAsync inside a Blazor render
+// (even static SSR) does not reliably flush the Set-Cookie header, so the form
+// on Login.razor posts here instead.
+// ---------------------------------------------------------------------------
+app.MapPost("/auth/login", async (HttpContext http, AuthData authData) =>
+{
+    var form = await http.Request.ReadFormAsync();
+    string userName = form["userName"].ToString();
+    string password = form["password"].ToString();
+    string returnUrl = form["returnUrl"].ToString();
+
+    // Empty-field checks mirror the legacy RequiredFieldValidators.
+    bool userBlank = string.IsNullOrWhiteSpace(userName);
+    bool passBlank = string.IsNullOrWhiteSpace(password);
+    if (userBlank || passBlank)
+    {
+        string flag = userBlank && passBlank ? "both" : (userBlank ? "user" : "pass");
+        return Results.Redirect($"/Login?error=required&f={flag}");
+    }
+
+    string? error;
+    bool ok;
+    try
+    {
+        // TryLogin validates credentials and calls HttpContext.SignInAsync with
+        // Name, UserId and DisplayName claims. Here HttpContext is a live request,
+        // so the cookie is written to the response.
+        ok = authData.TryLogin(userName, password, out error);
+    }
+    catch (Microsoft.Data.SqlClient.SqlException)
+    {
+        return Results.Redirect("/Login?error=db");
+    }
+
+    if (!ok)
+    {
+        return Results.Redirect("/Login?error=bad");
+    }
+
+    string redirect = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
+    return Results.Redirect(redirect);
 });
 
 // ---------------------------------------------------------------------------

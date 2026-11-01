@@ -5,7 +5,9 @@
     <h1>Apex Counter</h1>
     <AuthorizeView>
         <Authorized>
-            <p class="who">Signed in as @context.User.Identity?.Name</p>
+            @* Ground truth: the header shows the person's name (DisplayName claim,
+               e.g. "Mara Ellison"), not the username. *@
+            <p class="who">Signed in as @(context.User.FindFirst("DisplayName")?.Value ?? context.User.Identity?.Name)</p>
         </Authorized>
     </AuthorizeView>
 </div>
