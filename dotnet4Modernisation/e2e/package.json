@@ -1,0 +1,15 @@
+{
+  "name": "apexcounter-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright behavioural tests for Apex Counter, mapped to GROUND_TRUTH.md. Parameterised over the Web Forms app (5080) and the Blazor app (5088).",
+  "scripts": {
+    "test": "playwright test",
+    "test:webforms": "playwright test --project=webforms",
+    "test:blazor": "playwright test --project=blazor",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
